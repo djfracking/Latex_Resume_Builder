@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>resume-editor</title>
+<link rel="stylesheet" href="/static/vendor/xterm.css">
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<header id="topbar">
+  <span class="brand">resume&#8209;editor</span>
+  <span id="folder" title=""></span>
+  <span class="spacer"></span>
+  <span id="compile-status"></span>
+  <button id="btn-compile" title="compile (Ctrl+Shift+B)">Compile</button>
+  <button id="btn-save" title="save (Ctrl+S)">Save</button>
+  <button id="btn-new" title="create a new file">New file</button>
+  <button id="btn-term" class="toggle" title="show/hide terminal">Terminal</button>
+</header>
+
+<main id="main">
+  <aside id="sidebar">
+    <div id="filetree"></div>
+  </aside>
+
+  <section id="editor-pane">
+    <div id="editor-wrap">
+      <div id="gutter"></div>
+      <textarea id="editor" spellcheck="false" wrap="off"></textarea>
+    </div>
+    <div id="statusbar">
+      <span id="cur-file">&mdash;</span>
+      <span class="spacer"></span>
+      <span id="dirty"></span>
+      <span id="saved-at"></span>
+    </div>
+  </section>
+
+  <section id="preview-pane">
+    <div id="preview-wrap">
+      <iframe id="pdf" title="rendered resume"></iframe>
+      <div id="preview-empty">No PDF yet &mdash; edit the .tex and hit Compile (or just save; it recompiles automatically).</div>
+    </div>
+    <div id="log-wrap">
+      <div id="log-head">
+        <span>compile log</span>
+        <span class="spacer"></span>
+        <button id="btn-log-toggle">hide</button>
+      </div>
+      <pre id="log"></pre>
+    </div>
+  </section>
+</main>
+
+<section id="terminal-pane">
+  <div id="term-bar">
+    <span class="term-title">integrated CLI &mdash; runs inside the resume folder on this machine</span>
+    <span class="spacer"></span>
+    <button id="btn-shell" title="open a fresh shell">shell</button>
+    <button id="btn-vibe" title="run the vibe CLI here">run vibe</button>
+    <button id="btn-clear">clear</button>
+    <button id="btn-term-close" title="hide terminal">&times;</button>
+  </div>
+  <div id="term"></div>
+</section>
+
+<script src="/static/vendor/xterm.js"></script>
+<script src="/static/vendor/addon-fit.js"></script>
+<script src="/static/app.js"></script>
+</body>
+</html>
