@@ -1,0 +1,26 @@
+\documentclass[11pt,letterpaper]{article}
+\usepackage[margin=0.75in]{geometry}
+\usepackage[T1]{fontenc}
+\usepackage{enumitem}
+\pagestyle{empty}
+\setlength{\parindent}{0pt}
+
+\newcommand{\sectionline}[1]{\vspace{4pt}{\large\bfseries #1}\vspace{2pt}\hrule\vspace{4pt}}
+
+\begin{document}
+
+\begin{center}
+{\LARGE\bfseries Alex Doe}\\[2pt]
+alex.doe@example.com \textbar{} (555) 010-2030 \textbar{} Portland, OR
+\end{center}
+
+\sectionline{Profile}
+\input{source/profile}
+
+\sectionline{Experience}
+\input{source/experience}
+
+\sectionline{Skills}
+\input{source/skills}
+
+\end{document}
