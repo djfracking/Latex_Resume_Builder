@@ -3,6 +3,7 @@
 import os
 import shutil
 import subprocess
+import sys
 import time
 from pathlib import Path
 
@@ -22,6 +23,15 @@ def find_compiler(explicit=None):
         if path:
             return path
     return None
+
+
+def resolve_compiler(explicit=None):
+    if explicit:
+        try:
+            return find_compiler(explicit)
+        except RuntimeError as e:
+            print(f"warning: {e}; falling back to auto-detect", file=sys.stderr)
+    return find_compiler(None)
 
 
 def compile_tex(root: Path, tex_rel: str, compiler: str, timeout: int = 90):

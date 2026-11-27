@@ -46,11 +46,7 @@ def main(argv=None):
         return 2
 
     token = args.token or os.environ.get("RESUME_EDITOR_TOKEN") or secrets.token_urlsafe(24)
-    try:
-        compiler = latex.find_compiler(args.compiler)
-    except RuntimeError as e:
-        print(f"warning: {e}", file=sys.stderr)
-        compiler = None
+    compiler = latex.resolve_compiler(args.compiler)
     if compiler is None:
         print("warning: no LaTeX compiler found (looked for pdflatex/xelatex/lualatex/tectonic); "
               "compiles will fail until one is installed or passed via --compiler", file=sys.stderr)
