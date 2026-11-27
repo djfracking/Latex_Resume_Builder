@@ -115,6 +115,5 @@ terminal.
 resume_editor/    Python package (server, websocket framing, PTY, latex)
 gui/              static frontend (index.html, app.js, style.css, vendored xterm.js)
 bin/resume-editor launcher script
-sample-resume/    demo folder: template.tex + source/ + job-description.txt + agents.md
 tests/            end-to-end tests
 ```
