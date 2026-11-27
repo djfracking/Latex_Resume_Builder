@@ -8,6 +8,7 @@ Security model:
 """
 
 import base64
+import concurrent.futures
 import hmac
 import json
 import mimetypes
@@ -53,7 +54,24 @@ def resolve_under(root: Path, rel: str) -> Path:
     return candidate
 
 
-def list_files(root: Path):
+IO_TIMEOUT = 8.0
+UNREACHABLE = "resume folder unreachable (is the server up? is the sshfs mount stale?)"
+
+
+def run_with_timeout(fn, timeout, err_msg):
+    ex = concurrent.futures.ThreadPoolExecutor(max_workers=1)
+    fut = ex.submit(fn)
+    try:
+        return fut.result(timeout=timeout), None
+    except concurrent.futures.TimeoutError:
+        ex.shutdown(wait=False)
+        return None, err_msg
+    except BaseException:
+        ex.shutdown(wait=False)
+        raise
+
+
+def _walk_files(root: Path):
     out = []
     for dirpath, dirnames, filenames in os.walk(root):
         dirnames[:] = [d for d in dirnames if d not in EXCLUDED_DIRS]
@@ -69,6 +87,13 @@ def list_files(root: Path):
             out.append({"path": rel, "size": st.st_size, "mtime": st.st_mtime})
     out.sort(key=lambda f: f["path"])
     return out
+
+
+def list_files(root: Path):
+    files, err = run_with_timeout(lambda: _walk_files(root), IO_TIMEOUT, UNREACHABLE)
+    if err:
+        raise RuntimeError(err)
+    return files
 
 
 def find_main_tex(root: Path, files):
@@ -194,17 +219,29 @@ class Handler(BaseHTTPRequestHandler):
         elif path.startswith("/static/"):
             self._serve_static(path[len("/static/"):])
         elif path == "/api/state":
-            files = list_files(self.app.root)
+            try:
+                files = list_files(self.app.root)
+            except RuntimeError as e:
+                self._error(503, str(e))
+                return
+            has_pdf, _ = run_with_timeout(
+                lambda: bool(self.app.last_pdf and self.app.last_pdf.exists()),
+                IO_TIMEOUT, False)
             self._json({
                 "folder": self.app.root.name,
                 "files": files,
                 "main_tex": find_main_tex(self.app.root, files),
                 "compiler": self.app.compiler,
                 "vibe_cmd": self.app.vibe_cmd,
-                "has_pdf": bool(self.app.last_pdf and self.app.last_pdf.exists()),
+                "has_pdf": bool(has_pdf),
             })
         elif path == "/api/files":
-            self._json({"files": list_files(self.app.root)})
+            try:
+                files = list_files(self.app.root)
+            except RuntimeError as e:
+                self._error(503, str(e))
+                return
+            self._json({"files": files})
         elif path == "/api/file":
             self._get_file(query)
         elif path == "/api/compile":
@@ -273,17 +310,29 @@ class Handler(BaseHTTPRequestHandler):
         except ValueError as e:
             self._error(400, str(e))
             return
-        if not full.is_file():
+        def _read():
+            if not full.is_file():
+                raise FileNotFoundError(rel)
+            st = full.stat()
+            if st.st_size > MAX_READ:
+                raise ValueError("file too large to edit")
+            return {
+                "path": rel,
+                "content": full.read_text(encoding="utf-8", errors="replace"),
+                "mtime": st.st_mtime,
+            }
+        try:
+            payload, err = run_with_timeout(_read, IO_TIMEOUT, UNREACHABLE)
+        except FileNotFoundError:
             self._error(404, "not a file")
             return
-        if full.stat().st_size > MAX_READ:
-            self._error(413, "file too large to edit")
+        except ValueError as e:
+            self._error(413, str(e))
             return
-        self._json({
-            "path": rel,
-            "content": full.read_text(encoding="utf-8", errors="replace"),
-            "mtime": full.stat().st_mtime,
-        })
+        if err:
+            self._error(503, err)
+            return
+        self._json(payload)
 
     def _put_file(self):
         try:
@@ -298,21 +347,37 @@ class Handler(BaseHTTPRequestHandler):
         except ValueError as e:
             self._error(400, str(e))
             return
-        if full.is_dir():
+        def _write():
+            if full.is_dir():
+                raise IsADirectoryError(rel)
+            full.parent.mkdir(parents=True, exist_ok=True)
+            tmp = full.with_name(full.name + ".tmp-re")
+            tmp.write_text(content, encoding="utf-8")
+            os.replace(tmp, full)
+            return full.stat().st_mtime
+        try:
+            mtime, err = run_with_timeout(_write, IO_TIMEOUT, UNREACHABLE)
+        except IsADirectoryError:
             self._error(400, "path is a directory")
             return
-        full.parent.mkdir(parents=True, exist_ok=True)
-        tmp = full.with_name(full.name + ".tmp-re")
-        tmp.write_text(content, encoding="utf-8")
-        os.replace(tmp, full)
-        self._json({"ok": True, "path": rel, "mtime": full.stat().st_mtime})
+        except OSError as e:
+            self._error(500, str(e))
+            return
+        if err:
+            self._error(503, err)
+            return
+        self._json({"ok": True, "path": rel, "mtime": mtime})
 
     def _compile(self):
         try:
             data = json.loads(self._body().decode("utf-8") or "{}")
         except json.JSONDecodeError:
             data = {}
-        files = list_files(self.app.root)
+        try:
+            files = list_files(self.app.root)
+        except RuntimeError as e:
+            self._error(503, str(e))
+            return
         tex = data.get("file") or find_main_tex(self.app.root, files)
         if not tex:
             self._error(400, "no .tex file in folder")
@@ -330,21 +395,34 @@ class Handler(BaseHTTPRequestHandler):
             })
             return
         with self.app.compile_lock:
-            result = latex.compile_tex(self.app.root, tex, self.app.compiler)
+            result, err = run_with_timeout(
+                lambda: latex.compile_tex(self.app.root, tex, self.app.compiler),
+                150.0, "compile timed out (is the resume folder mount stale?)")
+        if err:
+            self._json({"ok": False, "error": err, "log": ""})
+            return
         self.app.last_log = result.get("log", "")
         self.app.last_pdf = Path(result["pdf_path"]) if result.get("pdf_path") else None
         self.app.last_compile = result
         self._json(result)
 
     def _get_pdf(self):
-        pdf = self.app.last_pdf
-        if not pdf or not pdf.is_file():
-            candidates = sorted(self.app.root.rglob("**/build/*.pdf"))
-            pdf = candidates[-1] if candidates else None
-        if not pdf or not pdf.is_file():
+        def _load():
+            pdf = self.app.last_pdf
+            if not pdf or not pdf.is_file():
+                candidates = sorted(self.app.root.rglob("**/build/*.pdf"))
+                pdf = candidates[-1] if candidates else None
+            if pdf and pdf.is_file():
+                return pdf.read_bytes()
+            return None
+        data, err = run_with_timeout(_load, IO_TIMEOUT, UNREACHABLE)
+        if err:
+            self._error(503, err)
+            return
+        if not data:
             self._error(404, "no compiled PDF yet")
             return
-        self._send(200, pdf.read_bytes(), "application/pdf")
+        self._send(200, data, "application/pdf")
 
     # ---------- WebSocket terminal ----------
 
