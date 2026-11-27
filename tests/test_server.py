@@ -359,6 +359,20 @@ class ServerTests(unittest.TestCase):
         self.assertIsNotNone(fatal, "expected a fatal message for a missing command")
         self.assertIn("nonexistent-cmd-xyz-123", fatal.get("error", ""))
 
+    def test_ws_survives_idle_timeouts(self):
+        ws = WSClient(self.fx.port, "/ws/term?cols=80&rows=24")
+        try:
+            time.sleep(0.5)
+            ws.send_text({"type": "input", "data": "echo STILL_ALIVE_9\n"})
+            out = ws.collect_output(b"STILL_ALIVE_9", timeout=10)
+            self.assertIn(b"STILL_ALIVE_9", out)
+            time.sleep(0.3)
+            ws.send_text({"type": "input", "data": "echo AGAIN_8\n"})
+            out = ws.collect_output(b"AGAIN_8", timeout=10)
+            self.assertIn(b"AGAIN_8", out)
+        finally:
+            ws.close()
+
     def test_ws_requires_auth(self):
         with self.assertRaises(AssertionError):
             WSClient(self.fx.port, "/ws/term", token="wrong")
