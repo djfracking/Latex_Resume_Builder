@@ -455,7 +455,7 @@ class Handler(BaseHTTPRequestHandler):
             self._ws_send({"type": "fatal",
                            "error": f"could not start '{cmd or 'shell'}': {e}"})
             return
-        reader = wsproto.FrameReader(self.rfile.read1)
+        reader = wsproto.FrameReader(self.connection.recv)
         self.connection.settimeout(0.05)
         sent_exit = False
         last_ping = time.time()
