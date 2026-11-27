@@ -198,9 +198,10 @@ class ServerTests(unittest.TestCase):
         status, headers, _ = self.fx.req("GET", "/", cookie=False)
         self.assertEqual(status, 303)
         self.assertEqual(headers.get("Location"), "/login")
-        status, _, body = self.fx.req("GET", "/login", cookie=False)
+        status, headers, body = self.fx.req("GET", "/login", cookie=False)
         self.assertEqual(status, 200)
         self.assertIn(b"token", body)
+        self.assertIn("text/html", headers.get("Content-Type", ""))
 
     def test_login_flow(self):
         status, _, body = self.fx.req(

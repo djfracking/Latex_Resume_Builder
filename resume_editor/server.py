@@ -176,7 +176,7 @@ class Handler(BaseHTTPRequestHandler):
         query = urllib.parse.parse_qs(url.query)
 
         if path == "/login":
-            self._send(200, LOGIN_PAGE.replace("<!--ERR-->", ""))
+            self._send(200, LOGIN_PAGE.replace("<!--ERR-->", ""), "text/html; charset=utf-8")
             return
         if path == "/ws/term":
             if not self._require_auth():
@@ -233,7 +233,7 @@ class Handler(BaseHTTPRequestHandler):
                     },
                 )
             else:
-                self._send(200, LOGIN_PAGE.replace("<!--ERR-->", '<p class="err">wrong token</p>'))
+                self._send(200, LOGIN_PAGE.replace("<!--ERR-->", '<p class="err">wrong token</p>'), "text/html; charset=utf-8")
             return
         if not self._require_auth():
             return
