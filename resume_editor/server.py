@@ -14,7 +14,9 @@ import json
 import mimetypes
 import os
 import socket
+import sys
 import threading
+import time
 import urllib.parse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -456,12 +458,16 @@ class Handler(BaseHTTPRequestHandler):
         reader = wsproto.FrameReader(self.rfile.read1)
         self.connection.settimeout(0.05)
         sent_exit = False
+        last_ping = time.time()
         try:
             while True:
                 try:
                     fin, opcode, payload = reader.read_frame()
                 except TimeoutError:
                     _, sent_exit = self._flush_pty(sess, sent_exit)
+                    if time.time() - last_ping > 20:
+                        self.connection.sendall(wsproto.encode_frame(wsproto.OP_PING, b""))
+                        last_ping = time.time()
                     continue
                 if opcode == wsproto.OP_CLOSE:
                     break
@@ -495,10 +501,13 @@ class Handler(BaseHTTPRequestHandler):
                             sess.close()
                             sess = new_sess
                 _, sent_exit = self._flush_pty(sess, sent_exit)
-        except (ConnectionError, ValueError, OSError):
-            pass
+        except (ConnectionError, ValueError, OSError) as e:
+            print(f"[ws] terminal connection closed ({type(e).__name__}: {e})",
+                  file=sys.stderr, flush=True)
         finally:
             sess.close()
+            print(f"[ws] terminal session ended (cmd={cmd or 'shell'})",
+                  file=sys.stderr, flush=True)
 
     def _flush_pty(self, sess, sent_exit):
         for chunk in sess.drain():
