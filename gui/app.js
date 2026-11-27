@@ -239,6 +239,7 @@ function termConnect(cmd) {
   const url = `${proto}://${location.host}/ws/term?cols=${term.cols}&rows=${term.rows}` +
     (cmd ? `&cmd=${encodeURIComponent(cmd)}` : "");
   ws = new WebSocket(url);
+  let fatal = false;
   ws.onopen = () => {
     attempts = 0;
     ws.send(JSON.stringify({ type: "resize", cols: term.cols, rows: term.rows }));
@@ -253,10 +254,13 @@ function termConnect(cmd) {
       term.write(new TextDecoder("utf-8").decode(bytes));
     } else if (msg.type === "exit") {
       term.write("\r\n\x1b[90m[process exited — press the shell/vibe button to start a new one]\x1b[0m\r\n");
+    } else if (msg.type === "fatal") {
+      fatal = true;
+      term.write("\r\n\x1b[91m[resume-editor] " + (msg.error || "terminal failed to start") + "\x1b[0m\r\n");
     }
   };
   ws.onclose = () => {
-    if (mySeq !== connSeq) return;
+    if (mySeq !== connSeq || fatal) return;
     attempts++;
     if (attempts === 1) term.write("\r\n\x1b[90m[disconnected — reconnecting…]\x1b[0m\r\n");
     if (attempts > 20) {

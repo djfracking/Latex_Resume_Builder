@@ -334,6 +334,26 @@ class ServerTests(unittest.TestCase):
         finally:
             ws.close()
 
+    def test_ws_bad_cmd_is_fatal_not_crash(self):
+        ws = WSClient(self.fx.port, "/ws/term?cmd=/nonexistent-cmd-xyz-123")
+        fatal = None
+        try:
+            deadline = time.time() + 10
+            while time.time() < deadline:
+                try:
+                    msg = ws.read_msg(timeout=2)
+                except (socket.timeout, TimeoutError, ConnectionError):
+                    break
+                if msg.get("type") == "fatal":
+                    fatal = msg
+                    break
+                if msg.get("type") == "close":
+                    break
+        finally:
+            ws.close()
+        self.assertIsNotNone(fatal, "expected a fatal message for a missing command")
+        self.assertIn("nonexistent-cmd-xyz-123", fatal.get("error", ""))
+
     def test_ws_requires_auth(self):
         with self.assertRaises(AssertionError):
             WSClient(self.fx.port, "/ws/term", token="wrong")
