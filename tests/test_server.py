@@ -113,6 +113,11 @@ class WSClient:
         payload = self._read(ln) if ln else b""
         if opcode == 8:
             return {"type": "close"}
+        if opcode == 9:
+            mask = os.urandom(4)
+            masked = bytes(b ^ mask[i % 4] for i, b in enumerate(payload))
+            self.sock.sendall(bytes([0x8A, 0x80 | len(payload)]) + mask + masked)
+            return {"type": "ping"}
         return json.loads(payload.decode())
 
     def collect_output(self, needle: bytes, timeout=20):
