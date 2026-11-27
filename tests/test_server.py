@@ -359,6 +359,17 @@ class ServerTests(unittest.TestCase):
             WSClient(self.fx.port, "/ws/term", token="wrong")
 
 
+class TimeoutTests(unittest.TestCase):
+    def test_run_with_timeout(self):
+        from resume_editor.server import run_with_timeout
+        ok, err = run_with_timeout(lambda: 42, 1.0, "t/o")
+        self.assertEqual(ok, 42)
+        self.assertIsNone(err)
+        val, err = run_with_timeout(lambda: time.sleep(3), 0.2, "t/o")
+        self.assertIsNone(val)
+        self.assertEqual(err, "t/o")
+
+
 class CliTests(unittest.TestCase):
     def test_refuses_non_loopback_bind(self):
         self.assertEqual(cli.main(["--host", "0.0.0.0", "--no-open"]), 2)
