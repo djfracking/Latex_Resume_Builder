@@ -15,13 +15,23 @@
   <span id="compile-status"></span>
   <button id="btn-compile" title="compile (Ctrl+Shift+B)">Compile</button>
   <button id="btn-save" title="save (Ctrl+S)">Save</button>
-  <button id="btn-new" title="create a new file">New file</button>
+  <button id="btn-new" title="new file (inline input in the sidebar)">New file</button>
   <button id="btn-vibe-top" title="open the bottom terminal and run vibe in the resume folder">Run vibe</button>
   <button id="btn-term" class="toggle" title="show/hide terminal">Terminal</button>
 </header>
 
 <main id="main">
   <aside id="sidebar">
+    <div id="sidebar-bar">
+      <span class="sb-title">files</span>
+      <span class="spacer"></span>
+      <button id="btn-new-file" title="new file">+ file</button>
+      <button id="btn-new-dir" title="new folder">+ dir</button>
+    </div>
+    <div id="new-entry" class="hidden">
+      <input id="new-entry-name" placeholder="path, e.g. source/notes.md">
+      <button id="btn-new-entry-ok" title="create">✓</button>
+    </div>
     <div id="filetree"></div>
   </aside>
 

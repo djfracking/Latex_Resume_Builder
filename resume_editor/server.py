@@ -77,6 +77,9 @@ def _walk_files(root: Path):
     out = []
     for dirpath, dirnames, filenames in os.walk(root):
         dirnames[:] = [d for d in dirnames if d not in EXCLUDED_DIRS]
+        rel_dir = Path(dirpath).relative_to(root).as_posix()
+        if rel_dir != ".":
+            out.append({"path": rel_dir, "dir": True})
         for name in filenames:
             if name in EXCLUDED_DIRS:
                 continue
@@ -278,8 +281,34 @@ class Handler(BaseHTTPRequestHandler):
             return
         if url.path == "/api/compile":
             self._compile()
+        elif url.path == "/api/mkdir":
+            self._mkdir()
         else:
             self._error(404, "not found")
+
+    def _mkdir(self):
+        try:
+            rel = json.loads(self._body().decode("utf-8"))["path"]
+        except (ValueError, KeyError, json.JSONDecodeError) as e:
+            self._error(400, f"bad request: {e}")
+            return
+        try:
+            full = resolve_under(self.app.root, rel)
+        except ValueError as e:
+            self._error(400, str(e))
+            return
+        def _mk():
+            full.mkdir(parents=True, exist_ok=True)
+            return True
+        try:
+            _, err = run_with_timeout(_mk, IO_TIMEOUT, UNREACHABLE)
+        except OSError as e:
+            self._error(500, str(e))
+            return
+        if err:
+            self._error(503, err)
+            return
+        self._json({"ok": True, "path": rel})
 
     def do_PUT(self):
         if not self._guard():
