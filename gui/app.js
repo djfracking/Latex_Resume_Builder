@@ -28,8 +28,12 @@ async function api(path, opts = {}) {
 
 /* ---------- file tree ---------- */
 
+const collapsedDirs = new Set();
+
 function renderTree() {
   const tree = $("filetree");
+  const sidebar = $("sidebar");
+  const scrollTop = sidebar.scrollTop;
   tree.innerHTML = "";
   const groups = new Map();
   for (const f of state.files) {
@@ -40,12 +44,19 @@ function renderTree() {
   }
   const dirs = [...groups.keys()].sort();
   for (const dir of dirs) {
+    const isCollapsed = dir !== "" && collapsedDirs.has(dir);
     if (dir) {
       const d = document.createElement("div");
-      d.className = "ft-dir";
-      d.textContent = dir;
+      d.className = "ft-dir" + (isCollapsed ? " collapsed" : "");
+      d.textContent = (isCollapsed ? "▸ " : "▾ ") + dir;
+      d.onclick = () => {
+        if (collapsedDirs.has(dir)) collapsedDirs.delete(dir);
+        else collapsedDirs.add(dir);
+        renderTree();
+      };
       tree.appendChild(d);
     }
+    if (isCollapsed) continue;
     for (const p of groups.get(dir)) {
       const el = document.createElement("div");
       el.className = "ft-file" + (p === currentFile ? " current" : "");
@@ -56,6 +67,9 @@ function renderTree() {
       tree.appendChild(el);
     }
   }
+  sidebar.scrollTop = scrollTop;
+  const cur = tree.querySelector(".ft-file.current");
+  if (cur) cur.scrollIntoView({ block: "nearest" });
 }
 
 function escapeHtml(s) {
@@ -250,6 +264,15 @@ term.onResize(({ cols, rows }) => {
 
 $("btn-shell").onclick = () => { term.reset(); termConnect(null); };
 $("btn-vibe").onclick = () => { term.reset(); termConnect(state.vibe_cmd || "vibe"); };
+$("btn-vibe-top").onclick = () => {
+  if (document.body.classList.contains("term-hidden")) {
+    document.body.classList.remove("term-hidden");
+    $("btn-term").classList.add("active");
+    setTimeout(() => fitAddon.fit(), 50);
+  }
+  term.reset();
+  termConnect(state.vibe_cmd || "vibe");
+};
 $("btn-clear").onclick = () => term.clear();
 $("btn-term").onclick = () => {
   document.body.classList.toggle("term-hidden");
@@ -270,6 +293,7 @@ async function refreshState() {
   $("folder").textContent = state.folder + "/";
   $("folder").title = "served locally from this folder only";
   $("btn-vibe").textContent = "run " + (state.vibe_cmd || "vibe");
+  $("btn-vibe-top").textContent = "Run " + (state.vibe_cmd || "vibe");
   renderTree();
 }
 

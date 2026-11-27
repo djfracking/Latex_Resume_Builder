@@ -1,6 +1,0 @@
-Senior Backend Engineer — Acme-like company
-
-We are looking for a backend engineer who can own payment systems end to end,
-write clean Python/Go services, and work on developer tooling.
-
-Nice to have: AWS, Terraform, performance tuning (p99 latency), LaTeX docs.
