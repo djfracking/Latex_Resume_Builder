@@ -370,6 +370,13 @@ class TimeoutTests(unittest.TestCase):
         self.assertEqual(err, "t/o")
 
 
+class CompilerTests(unittest.TestCase):
+    def test_resolve_compiler_falls_back_on_missing_explicit(self):
+        from resume_editor import latex
+        result = latex.resolve_compiler("/nonexistent-compiler-xyz")
+        self.assertEqual(result, latex.find_compiler(None))
+
+
 class CliTests(unittest.TestCase):
     def test_refuses_non_loopback_bind(self):
         self.assertEqual(cli.main(["--host", "0.0.0.0", "--no-open"]), 2)
