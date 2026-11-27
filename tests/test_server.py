@@ -283,6 +283,20 @@ class ServerTests(unittest.TestCase):
         self.assertEqual(status, 400)
         self.assertFalse((self.fx.tmp / "evil.txt").exists())
 
+    def test_mkdir_and_dir_listing(self):
+        status, _, _ = self.fx.req("POST", "/api/mkdir", body={"path": "versions/nested"})
+        self.assertEqual(status, 200)
+        self.assertTrue((self.fx.root / "versions" / "nested").is_dir())
+        status, _, body = self.fx.req("GET", "/api/files")
+        entries = {f["path"]: f for f in json.loads(body)["files"]}
+        self.assertIn("versions", entries)
+        self.assertTrue(entries["versions"].get("dir"))
+        self.assertIn("source", entries)
+        self.assertTrue(entries["source"].get("dir"))
+        status, _, _ = self.fx.req("POST", "/api/mkdir", body={"path": "../evil"})
+        self.assertEqual(status, 400)
+        self.assertFalse((self.fx.tmp / "evil").exists())
+
     def test_compile_and_pdf(self):
         status, _, body = self.fx.req("POST", "/api/compile", body={})
         self.assertEqual(status, 200)

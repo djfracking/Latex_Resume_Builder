@@ -55,7 +55,9 @@ button.toggle.active { background: var(--accent); border-color: var(--accent); c
 #main {
   display: grid;
   grid-template-columns: 210px 1fr 1fr;
+  grid-template-rows: minmax(0, 1fr);
   min-height: 0;
+  min-width: 0;
 }
 
 /* sidebar */
@@ -87,12 +89,34 @@ button.toggle.active { background: var(--accent); border-color: var(--accent); c
   overflow: hidden;
   text-overflow: ellipsis;
 }
+#sidebar-bar {
+  display: flex; align-items: center; gap: 4px;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--border);
+}
+.sb-title { font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: var(--dim); }
+#sidebar-bar button { padding: 1px 8px; font-size: 11px; }
+#new-entry {
+  display: flex; gap: 4px;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--border);
+  background: var(--panel2);
+}
+#new-entry.hidden, .hidden { display: none; }
+#new-entry-name {
+  flex: 1; min-width: 0;
+  background: var(--bg); color: var(--fg);
+  border: 1px solid var(--border); border-radius: 5px;
+  padding: 3px 7px; font-family: var(--mono); font-size: 12px;
+}
+#new-entry button { padding: 2px 9px; }
+#filetree .ft-sub { padding-left: 14px; }
 #filetree .ft-file:hover { background: var(--panel2); }
 #filetree .ft-file.current { background: var(--accent); color: #fff; }
 #filetree .ft-file .star { color: #e3b341; }
 
 /* editor */
-#editor-pane { display: grid; grid-template-rows: 1fr 26px; min-width: 0; }
+#editor-pane { display: grid; grid-template-rows: minmax(0, 1fr) 26px; min-width: 0; min-height: 0; }
 #editor-wrap { display: flex; min-height: 0; background: var(--bg); }
 #gutter {
   padding: 10px 8px 10px 0;
@@ -136,8 +160,9 @@ button.toggle.active { background: var(--accent); border-color: var(--accent); c
 /* preview */
 #preview-pane {
   display: grid;
-  grid-template-rows: 1fr 180px;
+  grid-template-rows: minmax(0, 1fr) 180px;
   min-width: 0;
+  min-height: 0;
   border-left: 1px solid var(--border);
 }
 #preview-wrap { position: relative; min-height: 0; background: #525659; }

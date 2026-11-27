@@ -30,51 +30,80 @@ async function api(path, opts = {}) {
 
 const collapsedDirs = new Set();
 
+function scrollSidebarTo(el) {
+  const sidebar = $("sidebar");
+  const sb = sidebar.getBoundingClientRect();
+  const r = el.getBoundingClientRect();
+  if (r.top < sb.top) sidebar.scrollTop -= sb.top - r.top;
+  else if (r.bottom > sb.bottom) sidebar.scrollTop += r.bottom - sb.bottom;
+}
+
+function buildTree(entries) {
+  const root = { children: new Map(), isDir: true, path: "" };
+  for (const e of entries) {
+    const parts = e.path.split("/");
+    let node = root;
+    for (let i = 0; i < parts.length; i++) {
+      const leaf = i === parts.length - 1;
+      if (!node.children.has(parts[i])) {
+        node.children.set(parts[i], {
+          children: new Map(),
+          isDir: leaf ? !!e.dir : true,
+          path: parts.slice(0, i + 1).join("/"),
+        });
+      } else if (leaf && e.dir) {
+        node.children.get(parts[i]).isDir = true;
+      }
+      node = node.children.get(parts[i]);
+    }
+  }
+  return root;
+}
+
+function renderNode(node, container) {
+  const entries = [...node.children.values()].sort(
+    (a, b) => (b.isDir - a.isDir) || a.path.localeCompare(b.path)
+  );
+  for (const e of entries) {
+    if (e.isDir) {
+      const isCollapsed = collapsedDirs.has(e.path);
+      const d = document.createElement("div");
+      d.className = "ft-dir" + (isCollapsed ? " collapsed" : "");
+      d.textContent = (isCollapsed ? "▸ " : "▾ ") + e.path.split("/").pop();
+      d.title = e.path;
+      d.onclick = () => {
+        if (collapsedDirs.has(e.path)) collapsedDirs.delete(e.path);
+        else collapsedDirs.add(e.path);
+        renderTree();
+      };
+      container.appendChild(d);
+      if (!isCollapsed) {
+        const sub = document.createElement("div");
+        sub.className = "ft-sub";
+        container.appendChild(sub);
+        renderNode(e, sub);
+      }
+    } else {
+      const el = document.createElement("div");
+      el.className = "ft-file" + (e.path === currentFile ? " current" : "");
+      const star = e.path === state.main_tex ? '<span class="star">★</span> ' : "";
+      el.innerHTML = star + escapeHtml(e.path.split("/").pop());
+      el.title = e.path;
+      el.onclick = () => openFile(e.path);
+      container.appendChild(el);
+    }
+  }
+}
+
 function renderTree() {
   const tree = $("filetree");
   const sidebar = $("sidebar");
   const scrollTop = sidebar.scrollTop;
   tree.innerHTML = "";
-  const groups = new Map();
-  for (const f of state.files) {
-    const parts = f.path.split("/");
-    const dir = parts.length > 1 ? parts.slice(0, -1).join("/") : "";
-    if (!groups.has(dir)) groups.set(dir, []);
-    groups.get(dir).push(f.path);
-  }
-  const dirs = [...groups.keys()].sort();
-  for (const dir of dirs) {
-    const isCollapsed = dir !== "" && collapsedDirs.has(dir);
-    if (dir) {
-      const d = document.createElement("div");
-      d.className = "ft-dir" + (isCollapsed ? " collapsed" : "");
-      d.textContent = (isCollapsed ? "▸ " : "▾ ") + dir;
-      d.onclick = () => {
-        if (collapsedDirs.has(dir)) collapsedDirs.delete(dir);
-        else collapsedDirs.add(dir);
-        renderTree();
-      };
-      tree.appendChild(d);
-    }
-    if (isCollapsed) continue;
-    for (const p of groups.get(dir)) {
-      const el = document.createElement("div");
-      el.className = "ft-file" + (p === currentFile ? " current" : "");
-      const star = p === state.main_tex ? '<span class="star">★</span> ' : "";
-      el.innerHTML = star + escapeHtml(p.split("/").pop());
-      el.title = p;
-      el.onclick = () => openFile(p);
-      tree.appendChild(el);
-    }
-  }
+  renderNode(buildTree(state.files), tree);
   sidebar.scrollTop = scrollTop;
   const cur = tree.querySelector(".ft-file.current");
-  if (cur) {
-    const sb = sidebar.getBoundingClientRect();
-    const r = cur.getBoundingClientRect();
-    if (r.top < sb.top) sidebar.scrollTop -= sb.top - r.top;
-    else if (r.bottom > sb.bottom) sidebar.scrollTop += r.bottom - sb.bottom;
-  }
+  if (cur) scrollSidebarTo(cur);
 }
 
 function escapeHtml(s) {
@@ -202,13 +231,58 @@ function showLog(log) {
 
 $("btn-save").onclick = saveNow;
 $("btn-compile").onclick = compileNow;
-$("btn-new").onclick = async () => {
-  const name = prompt("new file path (relative to the resume folder), e.g. source/notes.md");
+let newEntryMode = null;
+
+function startNewEntry(mode) {
+  newEntryMode = mode;
+  const bar = $("new-entry");
+  bar.classList.remove("hidden");
+  const input = $("new-entry-name");
+  input.placeholder = mode === "dir"
+    ? "new folder path, e.g. versions"
+    : "new file path, e.g. source/notes.md";
+  input.value = "";
+  input.focus();
+}
+
+function ancestorsOf(p) {
+  const parts = p.split("/");
+  const out = [];
+  for (let i = 1; i < parts.length; i++) out.push(parts.slice(0, i).join("/"));
+  return out;
+}
+
+async function commitNewEntry() {
+  const name = $("new-entry-name").value.trim().replace(/\/+$/, "");
   if (!name) return;
-  await api("/api/file", { method: "PUT", body: JSON.stringify({ path: name, content: "" }) });
-  await refreshState();
-  openFile(name);
-};
+  try {
+    if (newEntryMode === "dir") {
+      await api("/api/mkdir", { method: "POST", body: JSON.stringify({ path: name }) });
+      for (const a of ancestorsOf(name)) collapsedDirs.delete(a);
+      $("new-entry").classList.add("hidden");
+      await refreshState();
+      const el = [...document.querySelectorAll(".ft-dir")].find((d) => d.title === name);
+      if (el) scrollSidebarTo(el);
+    } else {
+      await api("/api/file", { method: "PUT", body: JSON.stringify({ path: name, content: "" }) });
+      for (const a of ancestorsOf(name)) collapsedDirs.delete(a);
+      $("new-entry").classList.add("hidden");
+      await refreshState();
+      await openFile(name);
+    }
+  } catch (e) {
+    $("saved-at").textContent = "create failed: " + e.message;
+  }
+}
+
+$("btn-new").onclick = () => startNewEntry("file");
+$("btn-new-file").onclick = () => startNewEntry("file");
+$("btn-new-dir").onclick = () => startNewEntry("dir");
+$("btn-new-entry-ok").onclick = commitNewEntry;
+$("new-entry-name").addEventListener("keydown", (e) => {
+  if (e.key === "Enter") commitNewEntry();
+  if (e.key === "Escape") $("new-entry").classList.add("hidden");
+});
 $("btn-log-toggle").onclick = () => {
   const w = $("log-wrap");
   w.classList.toggle("collapsed");
