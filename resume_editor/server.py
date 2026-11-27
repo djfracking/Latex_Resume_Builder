@@ -317,6 +317,11 @@ class Handler(BaseHTTPRequestHandler):
         if not tex:
             self._error(400, "no .tex file in folder")
             return
+        try:
+            resolve_under(self.app.root, tex)
+        except ValueError as e:
+            self._error(400, str(e))
+            return
         if not self.app.compiler:
             self._json({
                 "ok": False,
@@ -327,20 +332,15 @@ class Handler(BaseHTTPRequestHandler):
         with self.app.compile_lock:
             result = latex.compile_tex(self.app.root, tex, self.app.compiler)
         self.app.last_log = result.get("log", "")
-        self.app.last_pdf = (
-            self.app.root / "build" / (result.get("stem", "template") + ".pdf")
-            if result.get("pdf") else None
-        )
+        self.app.last_pdf = Path(result["pdf_path"]) if result.get("pdf_path") else None
         self.app.last_compile = result
         self._json(result)
 
     def _get_pdf(self):
         pdf = self.app.last_pdf
         if not pdf or not pdf.is_file():
-            build = self.app.root / "build"
-            if build.is_dir():
-                candidates = sorted(build.glob("*.pdf"))
-                pdf = candidates[-1] if candidates else None
+            candidates = sorted(self.app.root.rglob("**/build/*.pdf"))
+            pdf = candidates[-1] if candidates else None
         if not pdf or not pdf.is_file():
             self._error(404, "no compiled PDF yet")
             return

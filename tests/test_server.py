@@ -21,6 +21,7 @@ from resume_editor.server import App, make_server
 TOKEN = "test-token-abc123"
 
 FAKE_COMPILER = r'''#!/usr/bin/env python3
+import os
 import sys
 from pathlib import Path
 
@@ -57,7 +58,7 @@ else:
 outdir.mkdir(parents=True, exist_ok=True)
 stem = tex.stem
 (outdir / (stem + ".pdf")).write_bytes(build_pdf(b"stub resume pdf"))
-(outdir / (stem + ".log")).write_text("This is the fake log.\nOutput written on %s.pdf (1 page).\n" % stem)
+(outdir / (stem + ".log")).write_text("cwd=%s\nThis is the fake log.\nOutput written on %s.pdf (1 page).\n" % (os.getcwd(), stem))
 print("fakepdflatex: compiled", tex.name)
 '''
 
@@ -290,6 +291,27 @@ class ServerTests(unittest.TestCase):
         self.assertTrue(body.startswith(b"%PDF"))
         status, _, body = self.fx.req("GET", "/api/log")
         self.assertIn("fake log", json.loads(body)["log"])
+
+    def test_compile_subdir_uses_tex_dir_as_cwd(self):
+        status, _, _ = self.fx.req(
+            "PUT", "/api/file",
+            body={"path": "versions/whoop.tex", "content": "\\documentclass{article}\\begin{document}x\\end{document}\n"},
+        )
+        self.assertEqual(status, 200)
+        status, _, body = self.fx.req("POST", "/api/compile", body={"file": "versions/whoop.tex"})
+        self.assertEqual(status, 200)
+        result = json.loads(body)
+        self.assertTrue(result["ok"], result)
+        expected_cwd = str(Path(self.fx.root, "versions").resolve())
+        self.assertIn("cwd=" + expected_cwd, result["log"])
+        status, _, body = self.fx.req("GET", "/api/pdf")
+        self.assertEqual(status, 200)
+        self.assertTrue(body.startswith(b"%PDF"))
+
+    def test_compile_path_traversal_blocked(self):
+        status, _, body = self.fx.req("POST", "/api/compile", body={"file": "../evil.tex"})
+        self.assertEqual(status, 400)
+        self.assertIn(b"error", body)
 
     def test_ws_terminal_shell(self):
         ws = WSClient(self.fx.port, "/ws/term?cols=100&rows=30")

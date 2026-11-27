@@ -25,15 +25,18 @@ def find_compiler(explicit=None):
 
 
 def compile_tex(root: Path, tex_rel: str, compiler: str, timeout: int = 90):
-    tex_abs = root / tex_rel
+    tex_abs = (root / tex_rel).resolve()
+    if os.path.commonpath([str(root), str(tex_abs)]) != str(root):
+        return {"ok": False, "error": "tex file escapes the resume folder", "log": ""}
     if not tex_abs.is_file():
         return {"ok": False, "error": f"not a file: {tex_rel}", "log": ""}
-    build = root / "build"
+    workdir = tex_abs.parent
+    build = workdir / "build"
     build.mkdir(exist_ok=True)
     stem = tex_abs.stem
     base = os.path.basename(compiler)
     if base.startswith("tectonic"):
-        cmd = [compiler, "--outdir", str(build), str(tex_abs)]
+        cmd = [compiler, "--outdir", str(build), tex_abs.name]
     else:
         cmd = [
             compiler,
@@ -41,14 +44,14 @@ def compile_tex(root: Path, tex_rel: str, compiler: str, timeout: int = 90):
             "-halt-on-error",
             "-output-directory",
             str(build),
-            str(tex_abs),
+            tex_abs.name,
         ]
     output = []
     started = time.time()
     for _ in range(2):
         try:
             proc = subprocess.run(
-                cmd, cwd=str(root), capture_output=True, text=True, timeout=timeout
+                cmd, cwd=str(workdir), capture_output=True, text=True, timeout=timeout
             )
             output.append(proc.stdout + proc.stderr)
         except subprocess.TimeoutExpired:
@@ -67,6 +70,7 @@ def compile_tex(root: Path, tex_rel: str, compiler: str, timeout: int = 90):
         "ok": pdf.exists(),
         "log": log[-20000:],
         "pdf": pdf.exists(),
+        "pdf_path": str(pdf) if pdf.exists() else None,
         "stem": stem,
         "compiler": base,
         "duration_ms": int((time.time() - started) * 1000),
