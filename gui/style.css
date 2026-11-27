@@ -62,8 +62,10 @@ button.toggle.active { background: var(--accent); border-color: var(--accent); c
 #sidebar {
   background: var(--panel);
   border-right: 1px solid var(--border);
-  overflow: auto;
+  overflow-y: auto;
+  overflow-x: hidden;
   overscroll-behavior: contain;
+  scrollbar-gutter: stable;
   padding: 8px 0;
 }
 #filetree .ft-dir {
@@ -74,9 +76,6 @@ button.toggle.active { background: var(--accent); border-color: var(--accent); c
   padding: 6px 12px 2px;
   cursor: pointer;
   user-select: none;
-  position: sticky;
-  top: 0;
-  background: var(--panel);
 }
 #filetree .ft-dir:hover { color: var(--fg); }
 #filetree .ft-file {
