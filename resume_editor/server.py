@@ -369,7 +369,12 @@ class Handler(BaseHTTPRequestHandler):
         cols = int(query.get("cols", ["80"])[0])
         rows = int(query.get("rows", ["24"])[0])
         cmd = query.get("cmd", [None])[0]
-        sess = PtySession(self.app.root, cmd=cmd, cols=cols, rows=rows)
+        try:
+            sess = PtySession(self.app.root, cmd=cmd, cols=cols, rows=rows)
+        except OSError as e:
+            self._ws_send({"type": "fatal",
+                           "error": f"could not start '{cmd or 'shell'}': {e}"})
+            return
         reader = wsproto.FrameReader(self.rfile.read1)
         self.connection.settimeout(0.05)
         sent_exit = False
@@ -399,9 +404,18 @@ class Handler(BaseHTTPRequestHandler):
                         except (TypeError, ValueError):
                             pass
                     elif mtype == "spawn":
-                        sess.close()
-                        sess = PtySession(self.app.root, cmd=msg.get("cmd") or None,
-                                          cols=cols, rows=rows)
+                        new_cmd = msg.get("cmd") or None
+                        try:
+                            new_sess = PtySession(self.app.root, cmd=new_cmd,
+                                                  cols=cols, rows=rows)
+                        except OSError as e:
+                            err = f"[resume-editor] could not start '{new_cmd}': {e}\r\n"
+                            self._ws_send({"type": "output",
+                                           "data": base64.b64encode(err.encode()).decode("ascii")})
+                            self._ws_send({"type": "exit"})
+                        else:
+                            sess.close()
+                            sess = new_sess
                 _, sent_exit = self._flush_pty(sess, sent_exit)
         except (ConnectionError, ValueError, OSError):
             pass
