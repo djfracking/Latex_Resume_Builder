@@ -69,7 +69,12 @@ function renderTree() {
   }
   sidebar.scrollTop = scrollTop;
   const cur = tree.querySelector(".ft-file.current");
-  if (cur) cur.scrollIntoView({ block: "nearest" });
+  if (cur) {
+    const sb = sidebar.getBoundingClientRect();
+    const r = cur.getBoundingClientRect();
+    if (r.top < sb.top) sidebar.scrollTop -= sb.top - r.top;
+    else if (r.bottom > sb.bottom) sidebar.scrollTop += r.bottom - sb.bottom;
+  }
 }
 
 function escapeHtml(s) {
