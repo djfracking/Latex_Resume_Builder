@@ -225,15 +225,22 @@ fitAddon.fit();
 
 let ws = null;
 let wsCmd = null;
+let connSeq = 0;
+let reconnectTimer = null;
 
 function termConnect(cmd) {
+  connSeq++;
+  const mySeq = connSeq;
+  if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
   if (ws) { try { ws.close(); } catch (_) {} }
   wsCmd = cmd || null;
+  let attempts = 0;
   const proto = location.protocol === "https:" ? "wss" : "ws";
   const url = `${proto}://${location.host}/ws/term?cols=${term.cols}&rows=${term.rows}` +
     (cmd ? `&cmd=${encodeURIComponent(cmd)}` : "");
   ws = new WebSocket(url);
   ws.onopen = () => {
+    attempts = 0;
     ws.send(JSON.stringify({ type: "resize", cols: term.cols, rows: term.rows }));
   };
   ws.onmessage = (ev) => {
@@ -249,7 +256,14 @@ function termConnect(cmd) {
     }
   };
   ws.onclose = () => {
-    term.write("\r\n\x1b[90m[disconnected]\x1b[0m\r\n");
+    if (mySeq !== connSeq) return;
+    attempts++;
+    if (attempts === 1) term.write("\r\n\x1b[90m[disconnected — reconnecting…]\x1b[0m\r\n");
+    if (attempts > 20) {
+      term.write("\r\n\x1b[90m[still disconnected — click shell / Run vibe to retry]\x1b[0m\r\n");
+      return;
+    }
+    reconnectTimer = setTimeout(() => termConnect(wsCmd), Math.min(1000 * 2 ** (attempts - 1), 15000));
   };
   ws.onerror = () => {};
 }
